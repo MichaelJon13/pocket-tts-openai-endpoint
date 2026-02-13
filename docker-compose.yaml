@@ -1,6 +1,7 @@
 services:
   pocket-tts:
     build: .
+    container_name: pocket-tts-openai
     ports:
       - "8000:8000"
     volumes:
