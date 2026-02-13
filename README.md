@@ -80,6 +80,20 @@ Navigate to `http://localhost:8000` to try the web interface, it's faster than t
 
 You can check out the [serve documentation](https://github.com/kyutai-labs/pocket-tts/tree/main/docs/serve.md) for more details and examples.
 
+### Docker / Podman
+
+You can also run the server using Docker or Podman:
+
+```bash
+# Using Docker
+docker compose up -d
+
+# Using Podman
+podman compose up -d
+```
+
+Navigate to `http://localhost:8000` to access the web interface.
+
 ### OpenAI-Compatible API
 
 The server also provides an OpenAI-compatible TTS endpoint at `/v1/audio/speech`:
