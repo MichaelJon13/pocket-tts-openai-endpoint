@@ -1,3 +1,4 @@
+import base64
 import io
 import logging
 import os
@@ -50,11 +51,44 @@ OPENAI_SUPPORTED_FORMATS = {"mp3", "opus", "aac", "flac", "wav", "pcm"}
 
 OPENAI_SUPPORTED_MODELS = {"tts-1", "tts-1-hd", "gpt-4o-mini-tts", "gpt-4o-mini-tts-2025-12-15"}
 
+CUSTOM_VOICES: dict[str, str] = {}
+
+
+def convert_audio_format(wav_data: bytes, output_format: str) -> bytes:
+    """Convert WAV audio to different formats using pydub."""
+    try:
+        from pydub import AudioSegment
+    except ImportError:
+        return wav_data
+
+    audio = AudioSegment.from_file(io.BytesIO(wav_data), format="wav")
+
+    if output_format == "mp3":
+        output = io.BytesIO()
+        audio.export(output, format="mp3", bitrate="128k")
+        return output.getvalue()
+    elif output_format == "opus":
+        output = io.BytesIO()
+        audio.export(output, format="ogg", codec="libopus")
+        return output.getvalue()
+    elif output_format == "aac":
+        output = io.BytesIO()
+        audio.export(output, format="adts")
+        return output.getvalue()
+    elif output_format == "flac":
+        output = io.BytesIO()
+        audio.export(output, format="flac")
+        return output.getvalue()
+    elif output_format == "pcm":
+        return wav_data
+    else:
+        return wav_data
+
 
 class SpeechRequest(BaseModel):
     input: str
     model: str = "tts-1"
-    voice: str = "alloy"
+    voice: str | dict = "alloy"
     response_format: str | None = None
     speed: float | None = None
     instructions: str | None = None
@@ -78,7 +112,12 @@ tts_model: TTSModel | None = None
 global_model_state = None
 
 web_app = FastAPI(
-    title="Kyutai Pocket TTS API", description="Text-to-Speech generation API", version="1.0.0"
+    title="Kyutai Pocket TTS API",
+    description="Text-to-Speech generation API with OpenAI-compatible endpoint",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 web_app.add_middleware(
     CORSMiddleware,
@@ -231,18 +270,39 @@ async def create_speech(request: SpeechRequest):
     if request.speed is not None and (request.speed < 0.25 or request.speed > 4.0):
         raise HTTPException(status_code=400, detail="Speed must be between 0.25 and 4.0")
 
-    pocket_voice = OPENAI_VOICE_TO_POCKET_VOICE.get(request.voice)
-    if pocket_voice is None:
+    if request.stream_format not in (None, "sse", "audio"):
+        raise HTTPException(status_code=400, detail="stream_format must be 'sse' or 'audio'")
+
+    if request.instructions:
+        logger.warning("instructions parameter is not supported, ignoring")
+
+    if isinstance(request.voice, dict) and "id" in request.voice:
+        voice_id = request.voice["id"]
+        if voice_id not in CUSTOM_VOICES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Custom voice '{voice_id}' not found. Available: {list(CUSTOM_VOICES.keys())}",
+            )
+        pocket_voice = CUSTOM_VOICES[voice_id]
+    elif isinstance(request.voice, str):
+        pocket_voice = OPENAI_VOICE_TO_POCKET_VOICE.get(request.voice)
+        if pocket_voice is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid voice. Supported: {', '.join(OPENAI_VOICE_TO_POCKET_VOICE.keys())}",
+            )
+    else:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid voice. Supported: {', '.join(OPENAI_VOICE_TO_POCKET_VOICE.keys())}",
+            detail="Invalid voice format. Must be a string or object with 'id' field",
         )
 
     model_state = tts_model._cached_get_state_for_audio_prompt(pocket_voice)
 
     response_format = request.response_format or "wav"
+    use_sse = request.stream_format == "sse"
 
-    def generate_with_speed():
+    def generate_audio():
         import numpy as np
         import wave
 
@@ -259,8 +319,9 @@ async def create_speech(request: SpeechRequest):
 
         thread.join()
 
-        if audio_chunks and request.speed is not None and request.speed != 1.0:
-            wav_data = b"".join(audio_chunks)
+        wav_data = b"".join(audio_chunks)
+
+        if request.speed is not None and request.speed != 1.0 and wav_data:
             with wave.open(io.BytesIO(wav_data), "rb") as wav_in:
                 sample_rate = wav_in.getframerate()
                 n_frames = wav_in.getnframes()
@@ -286,9 +347,29 @@ async def create_speech(request: SpeechRequest):
                 wav_out.setframerate(sample_rate)
                 wav_out.writeframes(audio_int16.tobytes())
 
-            yield output.getvalue()
-        else:
-            yield b"".join(audio_chunks)
+            wav_data = output.getvalue()
+
+        if response_format != "wav" and wav_data:
+            wav_data = convert_audio_format(wav_data, response_format)
+
+        return wav_data
+
+    use_sse = request.stream_format == "sse"
+
+    if use_sse:
+
+        async def sse_generator():
+            wav_data = generate_audio()
+            if wav_data:
+                audio_b64 = base64.b64encode(wav_data).decode("utf-8")
+                yield f'data: {{"audio": "{audio_b64}", "done": false}}\n\n'
+            yield 'data: {"audio": "", "done": true}\n\n'
+
+        return StreamingResponse(
+            sse_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     media_type = {
         "mp3": "audio/mpeg",
@@ -299,8 +380,13 @@ async def create_speech(request: SpeechRequest):
         "pcm": "audio/wav",
     }.get(response_format, "audio/wav")
 
+    def audio_generator():
+        wav_data = generate_audio()
+        if wav_data:
+            yield wav_data
+
     return StreamingResponse(
-        generate_with_speed(),
+        audio_generator(),
         media_type=media_type,
         headers={
             "Content-Disposition": f"attachment; filename=speech.{response_format}",
