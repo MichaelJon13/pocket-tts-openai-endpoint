@@ -22,7 +22,7 @@ Supports Python 3.10, 3.11, 3.12, 3.13 and 3.14. Requires PyTorch 2.5+. Does not
 * Low latency, ~200ms to get the first audio chunk
 * Faster than real-time, ~6x real-time on a CPU of MacBook Air M4
 * Uses only 2 CPU cores
-* Python API and CLI
+* OpenAI-compatible HTTP API and CLI
 * Voice cloning
 * English only at the moment
 * Can handle infinitely long text inputs
@@ -121,8 +121,7 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 | `voice` | string | `"alloy"` | Voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse, marin, cedar |
 | `response_format` | string | `"wav"` | Output format: wav, mp3, opus, aac, flac, pcm |
 | `speed` | float | `1.0` | Playback speed: 0.25 to 4.0 |
-
-Note: mp3, opus, aac, and flac formats return WAV audio (encoding not yet supported).
+| `stream_format` | string | `"audio"` | Streaming: "audio" or "sse" |
 
 **Voice mapping:**
 
