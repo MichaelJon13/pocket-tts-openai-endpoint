@@ -12,6 +12,7 @@ import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 from typing_extensions import Annotated
 
 from pocket_tts.data.audio import stream_audio_chunks
@@ -29,7 +30,39 @@ from pocket_tts.models.tts_model import TTSModel
 from pocket_tts.utils.logging_utils import enable_logging
 from pocket_tts.utils.utils import PREDEFINED_VOICES, size_of_dict
 
+OPENAI_VOICE_TO_POCKET_VOICE = {
+    "alloy": "alba",
+    "ash": "marius",
+    "ballad": "javert",
+    "coral": "jean",
+    "echo": "fantine",
+    "fable": "cosette",
+    "onyx": "eponine",
+    "nova": "azelma",
+    "sage": "alba",
+    "shimmer": "marius",
+    "verse": "javert",
+    "marin": "jean",
+    "cedar": "fantine",
+}
+
+OPENAI_SUPPORTED_FORMATS = {"mp3", "opus", "aac", "flac", "wav", "pcm"}
+
+OPENAI_SUPPORTED_MODELS = {"tts-1", "tts-1-hd", "gpt-4o-mini-tts", "gpt-4o-mini-tts-2025-12-15"}
+
+
+class SpeechRequest(BaseModel):
+    input: str
+    model: str = "tts-1"
+    voice: str = "alloy"
+    response_format: str | None = None
+    speed: float | None = None
+    instructions: str | None = None
+    stream_format: str | None = None
+
+
 logger = logging.getLogger(__name__)
+
 
 cli_app = typer.Typer(
     help="Kyutai Pocket TTS - Text-to-Speech generation tool", pretty_exceptions_show_locals=False
@@ -169,6 +202,108 @@ def text_to_speech(
         media_type="audio/wav",
         headers={
             "Content-Disposition": "attachment; filename=generated_speech.wav",
+            "Transfer-Encoding": "chunked",
+        },
+    )
+
+
+@web_app.post("/v1/audio/speech")
+async def create_speech(request: SpeechRequest):
+    """
+    OpenAI-compatible TTS endpoint.
+    Generate speech from text using the specified voice.
+    """
+    if not request.input.strip():
+        raise HTTPException(status_code=400, detail="Input text cannot be empty")
+
+    if len(request.input) > 4096:
+        raise HTTPException(status_code=400, detail="Input text cannot exceed 4096 characters")
+
+    if (
+        request.response_format is not None
+        and request.response_format not in OPENAI_SUPPORTED_FORMATS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid response_format. Supported: {', '.join(OPENAI_SUPPORTED_FORMATS)}",
+        )
+
+    if request.speed is not None and (request.speed < 0.25 or request.speed > 4.0):
+        raise HTTPException(status_code=400, detail="Speed must be between 0.25 and 4.0")
+
+    pocket_voice = OPENAI_VOICE_TO_POCKET_VOICE.get(request.voice)
+    if pocket_voice is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid voice. Supported: {', '.join(OPENAI_VOICE_TO_POCKET_VOICE.keys())}",
+        )
+
+    model_state = tts_model._cached_get_state_for_audio_prompt(pocket_voice)
+
+    response_format = request.response_format or "wav"
+
+    def generate_with_speed():
+        import numpy as np
+        import wave
+
+        queue = Queue()
+        thread = threading.Thread(target=write_to_queue, args=(queue, request.input, model_state))
+        thread.start()
+
+        audio_chunks = []
+        while True:
+            data = queue.get()
+            if data is None:
+                break
+            audio_chunks.append(data)
+
+        thread.join()
+
+        if audio_chunks and request.speed is not None and request.speed != 1.0:
+            wav_data = b"".join(audio_chunks)
+            with wave.open(io.BytesIO(wav_data), "rb") as wav_in:
+                sample_rate = wav_in.getframerate()
+                n_frames = wav_in.getnframes()
+                audio_int16 = np.frombuffer(wav_in.readframes(n_frames), dtype=np.int16)
+
+            audio_float = audio_int16.astype(np.float32) / 32768.0
+
+            speed = request.speed
+            if speed > 1.0:
+                indices = np.arange(0, len(audio_float), int(speed))
+            else:
+                repeat = int(1 / speed)
+                indices = np.repeat(np.arange(len(audio_float)), repeat)
+            indices = indices[indices < len(audio_float)]
+            audio_float = audio_float[indices]
+
+            audio_int16 = (audio_float * 32767).astype(np.int16)
+
+            output = io.BytesIO()
+            with wave.open(output, "wb") as wav_out:
+                wav_out.setnchannels(1)
+                wav_out.setsampwidth(2)
+                wav_out.setframerate(sample_rate)
+                wav_out.writeframes(audio_int16.tobytes())
+
+            yield output.getvalue()
+        else:
+            yield b"".join(audio_chunks)
+
+    media_type = {
+        "mp3": "audio/mpeg",
+        "opus": "audio/opus",
+        "aac": "audio/aac",
+        "flac": "audio/flac",
+        "wav": "audio/wav",
+        "pcm": "audio/wav",
+    }.get(response_format, "audio/wav")
+
+    return StreamingResponse(
+        generate_with_speed(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename=speech.{response_format}",
             "Transfer-Encoding": "chunked",
         },
     )

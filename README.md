@@ -80,6 +80,54 @@ Navigate to `http://localhost:8000` to try the web interface, it's faster than t
 
 You can check out the [serve documentation](https://github.com/kyutai-labs/pocket-tts/tree/main/docs/serve.md) for more details and examples.
 
+### OpenAI-Compatible API
+
+The server also provides an OpenAI-compatible TTS endpoint at `/v1/audio/speech`:
+
+```bash
+# Start the server
+uvx pocket-tts serve
+
+# Call the API (in another terminal)
+curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1",
+    "input": "Hello world, this is a test!",
+    "voice": "alloy"
+  }' --output speech.wav
+```
+
+**Supported parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `input` | string | Required | Text to synthesize (max 4096 chars) |
+| `model` | string | `"tts-1"` | Model identifier (any value accepted) |
+| `voice` | string | `"alloy"` | Voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse, marin, cedar |
+| `response_format` | string | `"wav"` | Output format: wav, mp3, opus, aac, flac, pcm |
+| `speed` | float | `1.0` | Playback speed: 0.25 to 4.0 |
+
+Note: mp3, opus, aac, and flac formats return WAV audio (encoding not yet supported).
+
+**Voice mapping:**
+
+| OpenAI Voice | Pocket-TTS Voice |
+|--------------|------------------|
+| alloy | alba |
+| ash | marius |
+| ballad | javert |
+| coral | jean |
+| echo | fantine |
+| fable | cosette |
+| onyx | eponine |
+| nova | azelma |
+| sage | alba |
+| shimmer | marius |
+| verse | javert |
+| marin | jean |
+| cedar | fantine |
+
 ### The `export-voice` command
 
 Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](https://github.com/kyutai-labs/pocket-tts/tree/main/docs/export_voice.md) for more details and examples.
