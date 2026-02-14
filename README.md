@@ -22,7 +22,7 @@ Supports Python 3.10, 3.11, 3.12, 3.13 and 3.14. Requires PyTorch 2.5+. Does not
 * Low latency, ~200ms to get the first audio chunk
 * Faster than real-time, ~6x real-time on a CPU of MacBook Air M4
 * Uses only 2 CPU cores
-* Python API and CLI
+* OpenAI-compatible HTTP API and CLI
 * Voice cloning
 * English only at the moment
 * Can handle infinitely long text inputs
@@ -121,8 +121,7 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 | `voice` | string | `"alloy"` | Voice: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse, marin, cedar |
 | `response_format` | string | `"wav"` | Output format: wav, mp3, opus, aac, flac, pcm |
 | `speed` | float | `1.0` | Playback speed: 0.25 to 4.0 |
-
-Note: mp3, opus, aac, and flac formats return WAV audio (encoding not yet supported).
+| `stream_format` | string | `"audio"` | Streaming: "audio" or "sse" |
 
 **Voice mapping:**
 
@@ -142,45 +141,56 @@ Note: mp3, opus, aac, and flac formats return WAV audio (encoding not yet suppor
 | marin | jean |
 | cedar | fantine |
 
+### API Authentication (Optional)
+
+API keys can be optionally required for the `/v1/audio/speech` endpoint.
+
+**Enable API keys:**
+
+```bash
+# Using Docker/Podman with environment variable
+REQUIRE_API_KEYS=true ADMIN_API_KEY=my-admin-key podman compose up -d
+```
+
+**Get your API keys:**
+
+```bash
+# Requires admin key in Authorization header
+curl -H "Authorization: Bearer my-admin-key" http://localhost:8000/v1/auth
+```
+
+Response:
+```json
+{
+  "enabled": true,
+  "message": "API keys are required",
+  "keys": ["bzgjzmYtckg4skm9I9wuLJtanlXOUMF9", ...]
+}
+```
+
+**Use API key in requests:**
+
+```bash
+curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "input": "Hello world!",
+    "voice": "alloy"
+  }' --output speech.wav
+```
+
+**How it works:**
+- API keys are stored in `/root/.cache/pocket_tts/api_keys.json`
+- Keys persist across container restarts (stored in volume)
+- 3 API keys are generated on first startup
+- Keys are 32-character random strings
+- Set `ADMIN_API_KEY` env var to protect the `/v1/auth` endpoint
+
 ### The `export-voice` command
 
 Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](https://github.com/kyutai-labs/pocket-tts/tree/main/docs/export_voice.md) for more details and examples.
 
-
-## Using it as a Python library
-
-You can try out the Python library on Colab [here](https://colab.research.google.com/github/kyutai-labs/pocket-tts/blob/main/docs/pocket-tts-example.ipynb).
-
-Install the package with
-```bash
-pip install pocket-tts
-# or
-uv add pocket-tts
-```
-
-You can use this package as a simple Python library to generate audio from text.
-```python
-from pocket_tts import TTSModel
-import scipy.io.wavfile
-
-tts_model = TTSModel.load_model()
-voice_state = tts_model.get_state_for_audio_prompt(
-    "alba"  # One of the pre-made voices, see above
-    # You can also use any voice file you have locally or from Hugging Face:
-    # "./some_audio.wav"
-    # or "hf://kyutai/tts-voices/expresso/ex01-ex02_default_001_channel2_198s.wav"
-)
-audio = tts_model.generate_audio(voice_state, "Hello world, this is a test.")
-# Audio is a 1D torch tensor containing PCM data.
-scipy.io.wavfile.write("output.wav", tts_model.sample_rate, audio.numpy())
-```
-
-You can have multiple voice states around if 
-you have multiple voices you want to use. `load_model()` 
-and `get_state_for_audio_prompt()` are relatively slow operations,
-so we recommend to keep the model and voice states in memory if you can.
-
-You can check out the [Python API documentation](https://github.com/kyutai-labs/pocket-tts/tree/main/docs/python-api.md) for more details and examples.
 
 ## Unsupported features
 

@@ -11,4 +11,6 @@ RUN uv run pocket-tts serve --help && \
     rm -rf /root/.cache/uv && \
     uv run pocket-tts serve --help
 
+RUN uv pip install pocket-tts[server]
+
 CMD ["uv", "run", "pocket-tts", "serve"]

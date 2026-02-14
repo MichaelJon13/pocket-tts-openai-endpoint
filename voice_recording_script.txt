@@ -1,0 +1,21 @@
+# Voice Recording Script (30 seconds)
+
+Read the following text clearly and at a natural pace:
+
+---
+
+Hello! My name is [your name]. I'm recording this voice sample to create a custom text-to-speech voice. 
+
+The quick brown fox jumps over the lazy dog. All your base are belong to us. She sells seashells by the seashore. Peter Piper picked a peck of pickled peppers.
+
+I love using text-to-speech technology. It's amazing how computers can now generate natural-sounding human speech. The future of voice synthesis is incredibly exciting.
+
+---
+
+**Recording tips:**
+- Find a quiet room with minimal background noise
+- Speak at a consistent volume and pace
+- Keep a distance of about 6 inches from the microphone
+- Avoid reverb and echo
+
+**Duration:** ~30 seconds when read naturally

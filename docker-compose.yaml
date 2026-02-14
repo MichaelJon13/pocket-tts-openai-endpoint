@@ -1,11 +1,16 @@
 services:
   pocket-tts:
+    image: localhost/pocket-tts-openai:latest
     build: .
+    container_name: pocket-tts-openai
     ports:
       - "8000:8000"
     volumes:
       - pocket_tts_cache:/root/.cache/pocket_tts
       - hf_cache:/root/.cache/huggingface
+    environment:
+      - REQUIRE_API_KEYS=${REQUIRE_API_KEYS:-false}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
     command: ["uv", "run", "pocket-tts", "serve", "--host", "0.0.0.0"]
     restart: unless-stopped
 
