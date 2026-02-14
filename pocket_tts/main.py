@@ -1,7 +1,10 @@
 import base64
 import io
+import json
 import logging
 import os
+import random
+import string
 import sys
 import tempfile
 import threading
@@ -10,7 +13,7 @@ from queue import Queue
 
 import typer
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -52,6 +55,43 @@ OPENAI_SUPPORTED_FORMATS = {"mp3", "opus", "aac", "flac", "wav", "pcm"}
 OPENAI_SUPPORTED_MODELS = {"tts-1", "tts-1-hd", "gpt-4o-mini-tts", "gpt-4o-mini-tts-2025-12-15"}
 
 CUSTOM_VOICES: dict[str, str] = {}
+
+REQUIRE_API_KEYS = os.environ.get("REQUIRE_API_KEYS", "false").lower() == "true"
+API_KEYS_FILE = Path.home() / ".cache" / "pocket_tts" / "api_keys.json"
+
+
+def generate_api_key(length: int = 32) -> str:
+    """Generate a random API key."""
+    chars = string.ascii_letters + string.digits
+    return "".join(random.choice(chars) for _ in range(length))
+
+
+def load_api_keys() -> list[str]:
+    """Load API keys from file, or generate new ones if file doesn't exist."""
+    if API_KEYS_FILE.exists():
+        try:
+            data = json.loads(API_KEYS_FILE.read_text())
+            return data.get("keys", [])
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    API_KEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    keys = [generate_api_key() for _ in range(3)]
+    API_KEYS_FILE.write_text(json.dumps({"keys": keys}))
+    logger.info(f"Generated new API keys: {keys}")
+    return keys
+
+
+def get_api_keys() -> list[str]:
+    """Get all valid API keys."""
+    return load_api_keys()
+
+
+def verify_api_key(key: str) -> bool:
+    """Verify an API key."""
+    if not REQUIRE_API_KEYS:
+        return True
+    return key in get_api_keys()
 
 
 def convert_audio_format(wav_data: bytes, output_format: str) -> bytes:
@@ -142,6 +182,15 @@ async def root():
 @web_app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+@web_app.get("/v1/auth")
+async def get_auth_status():
+    """Get authentication status and API keys (if enabled)."""
+    if not REQUIRE_API_KEYS:
+        return {"enabled": False, "message": "API keys are not required"}
+    keys = get_api_keys()
+    return {"enabled": True, "message": "API keys are required", "keys": keys}
 
 
 def write_to_queue(queue, text_to_generate, model_state):
@@ -247,11 +296,19 @@ def text_to_speech(
 
 
 @web_app.post("/v1/audio/speech")
-async def create_speech(request: SpeechRequest):
+async def create_speech(request: SpeechRequest, http_request: Request):
     """
     OpenAI-compatible TTS endpoint.
     Generate speech from text using the specified voice.
     """
+    if REQUIRE_API_KEYS:
+        auth_header = http_request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+        api_key = auth_header[7:]
+        if not verify_api_key(api_key):
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
     if not request.input.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty")
 

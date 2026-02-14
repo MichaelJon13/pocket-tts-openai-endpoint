@@ -8,6 +8,8 @@ services:
     volumes:
       - pocket_tts_cache:/root/.cache/pocket_tts
       - hf_cache:/root/.cache/huggingface
+    environment:
+      - REQUIRE_API_KEYS=${REQUIRE_API_KEYS:-false}
     command: ["uv", "run", "pocket-tts", "serve", "--host", "0.0.0.0"]
     restart: unless-stopped
 

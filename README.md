@@ -141,6 +141,50 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 | marin | jean |
 | cedar | fantine |
 
+### API Authentication (Optional)
+
+API keys can be optionally required for the `/v1/audio/speech` endpoint.
+
+**Enable API keys:**
+
+```bash
+# Using Docker/Podman with environment variable
+REQUIRE_API_KEYS=true podman compose up -d
+```
+
+**Get your API keys:**
+
+```bash
+curl http://localhost:8000/v1/auth
+```
+
+Response:
+```json
+{
+  "enabled": true,
+  "message": "API keys are required",
+  "keys": ["bzgjzmYtckg4skm9I9wuLJtanlXOUMF9", ...]
+}
+```
+
+**Use API key in requests:**
+
+```bash
+curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "input": "Hello world!",
+    "voice": "alloy"
+  }' --output speech.wav
+```
+
+**How it works:**
+- API keys are stored in `/root/.cache/pocket_tts/api_keys.json`
+- Keys persist across container restarts (stored in volume)
+- 3 API keys are generated on first startup
+- Keys are 32-character random strings
+
 ### The `export-voice` command
 
 Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](https://github.com/kyutai-labs/pocket-tts/tree/main/docs/export_voice.md) for more details and examples.
