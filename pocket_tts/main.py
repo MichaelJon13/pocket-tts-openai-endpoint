@@ -57,6 +57,7 @@ OPENAI_SUPPORTED_MODELS = {"tts-1", "tts-1-hd", "gpt-4o-mini-tts", "gpt-4o-mini-
 CUSTOM_VOICES: dict[str, str] = {}
 
 REQUIRE_API_KEYS = os.environ.get("REQUIRE_API_KEYS", "false").lower() == "true"
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 API_KEYS_FILE = Path.home() / ".cache" / "pocket_tts" / "api_keys.json"
 
 
@@ -185,10 +186,16 @@ async def health():
 
 
 @web_app.get("/v1/auth")
-async def get_auth_status():
+async def get_auth_status(http_request: Request):
     """Get authentication status and API keys (if enabled)."""
     if not REQUIRE_API_KEYS:
         return {"enabled": False, "message": "API keys are not required"}
+
+    if ADMIN_API_KEY:
+        auth_header = http_request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or auth_header[7:] != ADMIN_API_KEY:
+            raise HTTPException(status_code=401, detail="Invalid admin key")
+
     keys = get_api_keys()
     return {"enabled": True, "message": "API keys are required", "keys": keys}
 

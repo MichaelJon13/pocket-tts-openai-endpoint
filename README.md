@@ -149,13 +149,14 @@ API keys can be optionally required for the `/v1/audio/speech` endpoint.
 
 ```bash
 # Using Docker/Podman with environment variable
-REQUIRE_API_KEYS=true podman compose up -d
+REQUIRE_API_KEYS=true ADMIN_API_KEY=my-admin-key podman compose up -d
 ```
 
 **Get your API keys:**
 
 ```bash
-curl http://localhost:8000/v1/auth
+# Requires admin key in Authorization header
+curl -H "Authorization: Bearer my-admin-key" http://localhost:8000/v1/auth
 ```
 
 Response:
@@ -184,6 +185,7 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 - Keys persist across container restarts (stored in volume)
 - 3 API keys are generated on first startup
 - Keys are 32-character random strings
+- Set `ADMIN_API_KEY` env var to protect the `/v1/auth` endpoint
 
 ### The `export-voice` command
 
