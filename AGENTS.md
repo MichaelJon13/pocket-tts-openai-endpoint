@@ -26,6 +26,12 @@ uv run pytest -n 3 -v
 # Run a single test
 uv run pytest tests/test_python_api.py -v
 
+# Run OpenAI API tests
+uv run pytest tests/test_openai_api.py -v
+
+# Run container tests (requires podman)
+uv run pytest tests/test_container.py -v
+
 # Run CLI locally (editable install)
 uv run pocket-tts generate
 uv run pocket-tts serve
@@ -86,6 +92,8 @@ This is a pure Python package with Rust extensions in `training/rust_exts/audio_
 - `test_python_api.py`: Tests for public Python API
 - `test_cli_generate.py`: Tests for CLI generate command
 - `test_documentation_examples.py`: Ensures docs examples work
+- `test_openai_api.py`: Tests for OpenAI-compatible TTS API endpoints
+- `test_container.py`: Tests for Podman/Docker container (requires podman, tests are skipped by default)
 
 ## Development Workflow
 
@@ -134,3 +142,21 @@ The `download_if_necessary()` utility handles `hf://` URLs and caches locally.
 3. **uv Python Preference**: Set to "only-managed" in pyproject.toml because system Python may lack headers.
 4. **CPU-Only PyTorch**: Uses PyTorch CPU index from `download.pytorch.org/whl/cpu` in uv config.
 5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality.
+
+### Manual Container Testing
+
+To test the container manually (tests are skipped by default):
+```bash
+# Build and run the container
+podman build -t pocket-tts-test .
+podman run -d --name pocket-tts-test -p 8001:8000 --cap-add=sys_admin pocket-tts-test:latest uv run pocket-tts serve --host 0.0.0.0
+
+# Wait for health check
+curl http://localhost:8001/health
+
+# Test endpoints
+curl -X POST http://localhost:8001/v1/audio/speech -H "Content-Type: application/json" -d '{"input":"Hello","voice":"alloy"}' -o test.wav
+
+# Clean up
+podman rm -f pocket-tts-test
+```
