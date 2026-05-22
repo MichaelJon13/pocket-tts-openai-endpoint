@@ -178,9 +178,10 @@ async def root():
     static_path = Path(__file__).parent / "static" / "index.html"
     content = static_path.read_text()
     # Replace the placeholder with the actual default text prompt
-    print(str(tts_model.origin))
+    origin = str(tts_model.origin) if tts_model is not None else "english"
+    print(origin)
     content = content.replace(
-        "DEFAULT_TEXT_PROMPT", get_default_text_for_language(str(tts_model.origin))
+        "DEFAULT_TEXT_PROMPT", get_default_text_for_language(origin)
     )
     return content
 
