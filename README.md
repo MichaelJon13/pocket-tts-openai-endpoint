@@ -90,29 +90,44 @@ For trying multiple voices and prompts quickly, prefer using the `serve` command
 
 ### The `serve` command
 
-You can also run a local server to generate audio via HTTP requests.
+You can run a local server to generate audio via HTTP requests and access a web interface.
 ```bash
-uvx pocket-tts serve
+uvx pocket-tts serve --host 0.0.0.0 --port 8000 --quantize --language english
 # or if you installed it manually with pip:
-pocket-tts serve
+pocket-tts serve --quantize --language english
 ```
-Navigate to `http://localhost:8000` to try the web interface, it's faster than the command line as the model is kept in memory between requests.
+
+**Options:**
+* `--host`: Host to bind to (default: `localhost`, use `0.0.0.0` in containers).
+* `--port`: Port to bind to (default: `8000`).
+* `--language`: Model language, e.g., `english`, `french_24l`, `german_24l`, `portuguese`, `italian`, `spanish` (default: `english`).
+* `--quantize`: Apply int8 quantization using `torchao` to reduce memory and CPU footprint.
+
+Navigate to `http://127.0.0.1:8000` to try the web interface. It's faster than the command line as the model is kept in memory between requests.
 
 You can check out the [serve documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/serve/) for more details and examples.
 
 ### Docker / Podman
 
-You can also run the server using Docker or Podman:
+You can also run the server using Docker or Podman. Note that for rootless environments (like Podman), accessing the interface via the IPv4 loopback `http://127.0.0.1:8000` is recommended to avoid IPv6 `localhost` resolution conflicts:
 
 ```bash
-# Using Docker
+# Using Docker Compose
 docker compose up -d
 
-# Using Podman
-podman compose up -d
+# Using Podman Compose
+podman-compose up -d
+
+# Directly with Podman
+podman run -d \
+  --name pocket-tts-openai \
+  -p 8000:8000 \
+  -v pocket_tts_cache:/root/.cache/pocket_tts \
+  -v hf_cache:/root/.cache/huggingface \
+  localhost/pocket-tts-openai:latest
 ```
 
-Navigate to `http://localhost:8000` to access the web interface.
+Navigate to `http://127.0.0.1:8000` to access the web interface.
 
 ### OpenAI-Compatible API
 
