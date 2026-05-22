@@ -107,6 +107,52 @@ Navigate to `http://127.0.0.1:8000` to try the web interface. It's faster than t
 
 You can check out the [serve documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/serve/) for more details and examples.
 
+### Hugging Face Authentication & Voice Cloning
+
+The voice cloning feature (including using your own `.wav` files with the `--voice` parameter or uploading voices via the web UI) requires downloading the voice cloning model weights, which are gated on Hugging Face.
+
+To access these models, you must:
+1. Create a Hugging Face account and accept the terms of use on the [Pocket TTS Model Card](https://huggingface.co/kyutai/pocket-tts).
+2. Generate a Hugging Face Access Token (`HF_TOKEN`) from your HF account settings.
+
+#### Environment Setup (.env)
+
+We recommend storing your Hugging Face token in a `.env` file in the root of the project. This file is ignored by Git (configured in `.gitignore`) to prevent accidental commits of your secrets:
+
+Create a `.env` file in the root of your project:
+```env
+HF_TOKEN=your_hugging_face_token_here
+```
+
+#### Running with Docker / Podman
+
+The `docker-compose.yaml` file is configured to automatically read the `HF_TOKEN` from the `.env` file and pass it to the container:
+```bash
+# Start container (will automatically read the .env file and pass the token)
+docker compose up -d
+# or
+podman-compose up -d
+```
+
+If you are running the container directly with `podman` or `docker`, pass the token explicitly using `-e`:
+```bash
+podman run -d \
+  --name pocket-tts-openai \
+  -p 8000:8000 \
+  -e HF_TOKEN=your_huggingface_token_here \
+  -v pocket_tts_cache:/root/.cache/pocket_tts \
+  -v hf_cache:/root/.cache/huggingface \
+  localhost/pocket-tts-openai:latest
+```
+
+#### Running Locally
+
+When running `pocket-tts` locally, you can load your `.env` variables into the environment:
+```bash
+# Load .env variables and run the CLI or Server
+export $(cat .env | xargs) && uv run pocket-tts serve
+```
+
 ### Docker / Podman
 
 You can also run the server using Docker or Podman. Note that for rootless environments (like Podman), accessing the interface via the IPv4 loopback `http://127.0.0.1:8000` is recommended to avoid IPv6 `localhost` resolution conflicts:
