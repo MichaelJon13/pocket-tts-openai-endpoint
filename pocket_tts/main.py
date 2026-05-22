@@ -261,6 +261,7 @@ def text_to_speech(
         voice_url: Optional built-in voice name (e.g., "alba"), or voice URL (http://, https://, or hf://)
         voice_wav: Optional uploaded voice file (mutually exclusive with voice_url)
     """
+    logging.info("Received web UI /tts request for text: '%s'", text[:50])
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
 

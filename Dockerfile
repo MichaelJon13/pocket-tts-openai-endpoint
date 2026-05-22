@@ -14,4 +14,4 @@ RUN uv run pocket-tts --help
 
 RUN uv pip install -e .[server]
 
-CMD ["uv", "run", "pocket-tts", "serve"]
+CMD ["uv", "run", "pocket-tts", "serve", "--host", "0.0.0.0"]
