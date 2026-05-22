@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Robust Startup Gating**: Refactored the web application initialization and testing suites to handle uninitialized model states gracefully and automatically skip gated voice cloning tests if HuggingFace credentials are not configured.
 - **README.md**: Updated documentation to detail the new serve options (`--language`, `--quantize`) and recommended connecting via `127.0.0.1` to bypass IPv6 loopback conflicts.
+- **SSH Authentication**: Switched the primary local `origin` tracking URL from HTTPS to SSH for secure, passwordless authentication using the registered `zerocool_id_rsa` SSH key.
 
 ## [1.1.0] - 2025-02-14
 
