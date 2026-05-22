@@ -11,6 +11,7 @@ services:
     environment:
       - REQUIRE_API_KEYS=${REQUIRE_API_KEYS:-false}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - HF_TOKEN=${HF_TOKEN:-}
     command: ["uv", "run", "pocket-tts", "serve", "--host", "0.0.0.0"]
     restart: unless-stopped
 
