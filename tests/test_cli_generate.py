@@ -40,6 +40,14 @@ def test_generate_basic_usage(tmp_path):
 @pytest.mark.skipif(IS_CI, reason=CI_SKIP_REASON)
 def test_generate_with_custom_voice(tmp_path):
     """Test generate command with custom voice prompt."""
+    from pocket_tts.models.tts_model import TTSModel
+    try:
+        model = TTSModel.load_model()
+        if not model.has_voice_cloning:
+            pytest.skip("Voice cloning weights are not available (HuggingFace authentication required)")
+    except Exception as e:
+        pytest.skip(f"Failed to check voice cloning availability: {e}")
+
     output_file = tmp_path / "custom_voice_test.wav"
 
     result = runner.invoke(
