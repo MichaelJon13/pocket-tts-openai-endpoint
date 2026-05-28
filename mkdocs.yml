@@ -1,6 +1,6 @@
 site_name: Pocket TTS
-repo_url: https://github.com/kyutai-labs/pocket-tts
-repo_name: kyutai-labs/pocket-tts
+repo_url: https://github.com/MichaelJon13/pocket-tts-openai-endpoint
+repo_name: MichaelJon13/pocket-tts-openai-endpoint
 extra:
   generator: false
 

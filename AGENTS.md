@@ -45,7 +45,7 @@ Pre-commit handles this automatically, but you can run manually:
 ```
 
 ### Building (No Build Step)
-This is a pure Python package with Rust extensions in `training/rust_exts/audio_ds/` for training-time audio processing. The main package does not require building.
+This is a pure Python package with no build step required.
 
 ## Code Structure
 
@@ -86,7 +86,7 @@ This is a pure Python package with Rust extensions in `training/rust_exts/audio_
 - `utils.py`: HuggingFace downloads, timing utilities
 
 **Configuration (`config/`):**
-- `b6369a24.yaml`: Model configuration (transformer dims, layers, vocab size, etc.)
+- `english.yaml` (and per-language `.yaml` files): Model configuration (transformer dims, layers, vocab size, etc.)
 
 ### Testing (`tests/`)
 - `test_python_api.py`: Tests for public Python API
