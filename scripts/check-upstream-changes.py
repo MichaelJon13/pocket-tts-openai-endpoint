@@ -22,26 +22,29 @@ HF = "https://huggingface.co"
 
 # (repo_id, file_path, pinned_commit, source_location)
 # file_path is empty when the revision is a tree hash (directory/embedding refs).
-PINNED_FILES: list[tuple[str, str, str, str]] = [
+# Entries are (repo_id, file_path, pinned_commit, source_location, is_optional)
+# is_optional=True means the code handles the failure gracefully (fallback exists).
+PINNED_FILES: list[tuple[str, str, str, str, bool]] = [
     # model weights — pocket_tts/config/*.yaml
-    ("kyutai/pocket-tts", "languages/english/model.safetensors", "39592ff23c9ef80098bb74895d104c26275fe2c9", "pocket_tts/config/english.yaml"),
+    # This is the old path; code falls back to `weights_path_without_voice_cloning` on failure (tts_model.py:204)
+    ("kyutai/pocket-tts", "languages/english/model.safetensors", "39592ff23c9ef80098bb74895d104c26275fe2c9", "pocket_tts/config/english.yaml", True),
     # model weights w/o voice cloning — config
-    ("kyutai/pocket-tts-without-voice-cloning", "languages/english/model.safetensors", "d29db7978e464fb90cb3359ee0c69a273b9142cc", "pocket_tts/config/english.yaml"),
+    ("kyutai/pocket-tts-without-voice-cloning", "languages/english/model.safetensors", "d29db7978e464fb90cb3359ee0c69a273b9142cc", "pocket_tts/config/english.yaml", False),
     # tokenizer (per-language) — config
-    ("kyutai/pocket-tts-without-voice-cloning", "languages/english/tokenizer.model", "d29db7978e464fb90cb3359ee0c69a273b9142cc", "pocket_tts/config/english.yaml"),
+    ("kyutai/pocket-tts-without-voice-cloning", "languages/english/tokenizer.model", "d29db7978e464fb90cb3359ee0c69a273b9142cc", "pocket_tts/config/english.yaml", False),
     # tokenizer (base) — pocket_tts/conditioners/text.py
-    ("kyutai/pocket-tts-without-voice-cloning", "tokenizer.model", "d4fdd22ae8c8e1cb3634e150ebeff1dab2d16df3", "pocket_tts/conditioners/text.py"),
+    ("kyutai/pocket-tts-without-voice-cloning", "tokenizer.model", "d4fdd22ae8c8e1cb3634e150ebeff1dab2d16df3", "pocket_tts/conditioners/text.py", False),
     # voice embeddings dir — pocket_tts/utils/utils.py
-    ("kyutai/pocket-tts-without-voice-cloning", "", "e041936c75475d350b405bc870bcf7c22da4e9e6", "pocket_tts/utils/utils.py"),
+    ("kyutai/pocket-tts-without-voice-cloning", "", "e041936c75475d350b405bc870bcf7c22da4e9e6", "pocket_tts/utils/utils.py", False),
     # non-English voice prompts — pocket_tts/utils/utils.py
-    ("kyutai/pocket-tts", "", "64ab7d24c479d736a83b8cc666c4a776fca30fda", "pocket_tts/utils/utils.py"),
+    ("kyutai/pocket-tts", "", "64ab7d24c479d736a83b8cc666c4a776fca30fda", "pocket_tts/utils/utils.py", False),
     # estelle voice prompt — pocket_tts/utils/utils.py
-    ("kyutai/tts-voices", "", "1fc7395b7e012e2bbebfca14b942a4ef62ccc899", "pocket_tts/utils/utils.py"),
+    ("kyutai/tts-voices", "", "1fc7395b7e012e2bbebfca14b942a4ef62ccc899", "pocket_tts/utils/utils.py", False),
 ]
 
 
-FILE_CHECKS = [(r, f, h, s) for r, f, h, s in PINNED_FILES if f]
-DIR_CHECKS = [(r, h, s) for r, f, h, s in PINNED_FILES if not f]
+FILE_CHECKS = [(r, f, h, s, o) for r, f, h, s, o in PINNED_FILES if f]
+DIR_CHECKS = [(r, h, s, o) for r, f, h, s, o in PINNED_FILES if not f]
 
 
 def check_file(repo_id: str, file_path: str, pinned: str) -> bool:
@@ -83,20 +86,20 @@ def main():
 
     all_ok = True
 
-    for repo_id, file_path, pinned, source in FILE_CHECKS:
+    for repo_id, file_path, pinned, source, optional in FILE_CHECKS:
         ok = check_file(repo_id, file_path, pinned)
-        status = "✓" if ok else "✗ MISSING"
-        if not ok:
+        label = "⚠ STALE (optional)" if not ok and optional else ("✓" if ok else "✗ MISSING")
+        if not ok and not optional:
             all_ok = False
-        print(f"  {status}  {repo_id}/{file_path}")
+        print(f"  {label}  {repo_id}/{file_path}")
         print(f"       pinned: {pinned[:12]}  ({source})")
 
-    for repo_id, pinned, source in DIR_CHECKS:
+    for repo_id, pinned, source, optional in DIR_CHECKS:
         ok = check_dir(repo_id, pinned)
-        status = "✓" if ok else "✗ MISSING"
-        if not ok:
+        label = "⚠ STALE (optional)" if not ok and optional else ("✓" if ok else "✗ MISSING")
+        if not ok and not optional:
             all_ok = False
-        print(f"  {status}  {repo_id}/ (tree)")
+        print(f"  {label}  {repo_id}/ (tree)")
         print(f"       pinned: {pinned[:12]}  ({source})")
 
     print()
