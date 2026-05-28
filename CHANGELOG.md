@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Native macOS App**: Added link to the upstream's new native macOS Core ML app to the projects list.
+
+### Changed
+- **README.md**: Major cleanup — removed outdated "quantization unsupported" line (now supported via `--quantize`), consolidated two overlapping Docker sections into one, replaced all `uvx pocket-tts` and `pip install pocket-tts` references with `uv run pocket-tts` (since those pull the upstream package, not this fork), fixed all upstream doc links to point to local docs, and updated GitHub repo link to the fork.
+- **Doc files**: Updated `docs/CLI Commands/*.md`, `docs/API Reference/python-api.md`, and `docs/quantization.md` to use `uv run pocket-tts` instead of `uvx pocket-tts` or `pip install pocket-tts`.
+- **AGENTS.md**: Added mention of the OpenAI endpoint, `export_voice` command, missing utils (`logging_utils.py`, `weights_loading.py`), pydub dependency, and fixed container test commands to use `pocket-tts-openai`.
+- **`mkdocs.yml`**: Updated `repo_url` and `repo_name` to point to this fork.
+- **Version pinning**: Updated the README's `uv add` and install instructions to explicitly guide users to clone the fork rather than install the upstream PyPI package.
+
+### Removed
+- `MiniMaxM25.md` — orphaned file.
+- `test.mp3` — test artifact.
+- `pocket_tts/utils/debugging.py` — dead code (zero imports).
+- `deploy.sh`, `swarm-config.yaml`, `docker-bake.hcl` — Kyutai-specific infrastructure files (hardcoded SSH hosts, Docker registries, Swarm TLS config).
+- `docs/API Reference/Reference/` — flattened nested directory.
+- Quantization from the "Unsupported features" list in README (now supported).
+
 ## [2.1.0] - 2026-05-22
 
 ### Added
