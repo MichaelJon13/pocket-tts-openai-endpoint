@@ -350,31 +350,33 @@ On first run, pocket-tts downloads model weights, tokenizer, and voice samples f
 HuggingFace Hub. If those files are ever removed from HuggingFace, new installs
 would fail — but existing cached copies continue working indefinitely.
 
-To ensure portability to a new machine, back up these two directories:
+The backup tarball includes a `MANIFEST.md` that explains every file and how to
+restore.
 
+**Backup** (creates ~524 MB tarball):
 ```bash
-# ~490 MB — model weights, tokenizer, voice embeddings per language
-~/.cache/huggingface/
-
-# ~1 MB — cached voice prompts
-~/.cache/pocket_tts/
-```
-
-**Backup:**
-```bash
-tar czf pocket-tts-cache.tar.gz \
+tar czf pocket-tts-cache-$(date +%F).tar.gz \
+  ~/.cache/huggingface/hub/models--kyutai--pocket-tts \
   ~/.cache/huggingface/hub/models--kyutai--pocket-tts-without-voice-cloning \
   ~/.cache/huggingface/hub/models--kyutai--tts-voices \
   ~/.cache/pocket_tts/
 ```
 
+> The `models--kyutai--pocket-tts` directory contains legacy model weights with
+> built-in voice cloning. If omitted, custom voice prompts (`--voice` flag) will
+> raise an error at runtime — the code falls back to the `without-voice-cloning`
+> variant and disables voice cloning.
+
 **Restore on a new machine:**
 ```bash
 # Extract before first run
-tar xzf pocket-tts-cache.tar.gz -C ~/
+tar xzf pocket-tts-cache-*.tar.gz -C ~/
 ```
 
 The cache directories are read-only after extraction — no HF token needed.
+
+Run `scripts/check-upstream-changes.py` periodically to verify all pinned HF
+revisions still resolve.
 
 ## Unsupported features
 
