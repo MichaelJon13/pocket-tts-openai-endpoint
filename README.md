@@ -3,7 +3,7 @@
 <img width="1446" height="622" alt="pocket-tts-logo-v2-transparent" src="https://github.com/user-attachments/assets/637b5ed6-831f-4023-9b4c-741be21ab238" />
 
 A lightweight text-to-speech (TTS) application designed to run efficiently on CPUs.
-Forget about the hassle of using GPUs and web APIs serving TTS models. With Kyutai's Pocket TTS, generating audio is just a pip install and a function call away.
+Forget about the hassle of using GPUs and web APIs serving TTS models. With Kyutai's Pocket TTS, generating audio is just a function call away.
 
 Supports Python 3.10, 3.11, 3.12, 3.13 and 3.14. Requires PyTorch 2.5+. Does not require the gpu version of PyTorch.
 
@@ -41,7 +41,8 @@ You can use pocket-tts directly from the command line with `uv` (installation in
 
 This will generate a wav file `./tts_output.wav` saying the default text with the default voice, and display some speed statistics.
 ```bash
-uvx pocket-tts generate
+# From the repo root:
+uv run pocket-tts generate
 # or if installed locally:
 uv run pocket-tts generate
 ```
@@ -90,9 +91,8 @@ For trying multiple voices and prompts quickly, prefer using the `serve` command
 
 You can run a local server to generate audio via HTTP requests and access a web interface.
 ```bash
-uvx pocket-tts serve --host 0.0.0.0 --port 8000 --quantize --language english
-# or if you installed it manually with pip:
-pocket-tts serve --quantize --language english
+# From the repo root:
+uv run pocket-tts serve --host 0.0.0.0 --port 8000 --quantize --language english
 ```
 
 **Options:**
@@ -146,8 +146,8 @@ export $(cat .env | xargs) && uv run pocket-tts serve
 The server also provides an OpenAI-compatible TTS endpoint at `/v1/audio/speech`:
 
 ```bash
-# Start the server
-uvx pocket-tts serve
+# Start the server (from the repo root, or install locally first)
+uv run pocket-tts serve
 
 # Call the API (in another terminal)
 curl -X POST http://localhost:8000/v1/audio/speech \

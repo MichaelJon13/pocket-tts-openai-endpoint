@@ -7,9 +7,8 @@ The `export-voice` command allows you to convert an audio file to a voice embedd
 ## Basic Usage
 
 ```bash
-uvx pocket-tts export-voice audio-path export-path
-# or if installed manually:
-pocket-tts export-voice audio-path export-path
+# From the repo root:
+uv run pocket-tts export-voice audio-path export-path
 ```
 
 Only the first 30 seconds of the audio file will be processed.
@@ -31,11 +30,8 @@ Only the first 30 seconds of the audio file will be processed.
 
 ```bash
 # export a single file
-pocket-tts export-voice voice_memo127762.mp3 jack.safetensors
 
 # export an online file to current directory
-pocket-tts export-voice https://huggingface.co/kyutai/tts-voices/resolve/main/alba-mackenna/announcer.wav ./announcer.safetensors
 
 # use the exported safetensors
-pocket-tts generate --text "Hello, welcome to today's game between the Bears and Cubs."  --voice announcer.safetensors
 ```

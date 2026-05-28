@@ -5,9 +5,8 @@ The `serve` command starts a FastAPI web server that provides both a web interfa
 ## Basic Usage
 
 ```bash
-uvx pocket-tts serve
-# or if installed manually:
-pocket-tts serve
+# From the repo root:
+uv run pocket-tts serve
 ```
 
 This starts a server on `http://localhost:8000` with the default voice model.
@@ -26,16 +25,13 @@ This starts a server on `http://localhost:8000` with the default voice model.
 
 ```bash
 # Start with default settings
-pocket-tts serve
 
 # Custom host and port
-pocket-tts serve --host "localhost" --port 8080
 ```
 
 ### Custom Language
 To select the default language model, pass `--language`:
 ```bash
-pocket-tts serve --language french_24l
 ```
 
 ### Custom Model Config
@@ -48,7 +44,6 @@ Then, use the --config option to point to your newly created config.
 
 ```bash
 # Use a different config
-pocket-tts serve --config "C://pocket-tts/my_config.yaml"
 ```
 
 ## Web Interface

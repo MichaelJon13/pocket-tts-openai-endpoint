@@ -5,7 +5,10 @@ Kyutai Pocket TTS provides a Python API for integrating text-to-speech capabilit
 ## Installation
 
 ```bash
-pip install pocket-tts
+# From the repo root:
+uv run pocket-tts
+# or add as a dependency:
+uv add pocket-tts
 ```
 
 ## Quick Start
