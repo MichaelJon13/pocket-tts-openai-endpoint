@@ -88,5 +88,7 @@ CLAUDE.md
 QWEN.md
 .claude/
 voices
-
 italk.yaml
+
+# HF model cache backup
+pocket-tts-huggingface-model-cache-*.tar.gz
