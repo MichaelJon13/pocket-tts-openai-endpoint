@@ -6,13 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Native macOS App**: Added link to the upstream's new native macOS Core ML app to the projects list.
+- **`/v1/chat/completions`**: New endpoint that proxies to any OpenAI-compatible LLM backend, with sentence-level streaming TTS. Non-streaming returns full text + base64 WAV audio; streaming emits SSE `text` and `audio` events per completed sentence.
+- **`/v1/audio/voices`**: New endpoint listing all available voices (OpenAI mapped + custom).
+- **`audioop-lts` guard**: Conditional dependency for Python 3.13+ (pydub compatibility fix).
 
 ### Changed
-- **README.md**: Major cleanup — removed outdated "quantization unsupported" line (now supported via `--quantize`), consolidated two overlapping Docker sections into one, replaced all `uvx pocket-tts` and `pip install pocket-tts` references with `uv run pocket-tts` (since those pull the upstream package, not this fork), fixed all upstream doc links to point to local docs, and updated GitHub repo link to the fork.
+- **README.md**: Major cleanup — removed outdated "quantization unsupported" line (now supported via `--quantize`), consolidated two overlapping Docker sections into one, replaced all `uvx pocket-tts` and `pip install pocket-tts` references with `uv run pocket-tts` (since those pull the upstream package, not this fork), fixed all upstream doc links to point to local docs, and updated GitHub repo link to the fork. Added documentation for `/v1/chat/completions` and `/v1/audio/voices`.
 - **Doc files**: Updated `docs/CLI Commands/*.md`, `docs/API Reference/python-api.md`, and `docs/quantization.md` to use `uv run pocket-tts` instead of `uvx pocket-tts` or `pip install pocket-tts`.
-- **AGENTS.md**: Added mention of the OpenAI endpoint, `export_voice` command, missing utils (`logging_utils.py`, `weights_loading.py`), pydub dependency, and fixed container test commands to use `pocket-tts-openai`.
+- **AGENTS.md**: Added mention of the OpenAI endpoint, `export_voice` command, missing utils (`logging_utils.py`, `weights_loading.py`), pydub dependency, and fixed container test commands to use `pocket-tts-openai`. Added chat completions endpoint, quantization migration, tests info.
 - **`mkdocs.yml`**: Updated `repo_url` and `repo_name` to point to this fork.
 - **Version pinning**: Updated the README's `uv add` and install instructions to explicitly guide users to clone the fork rather than install the upstream PyPI package.
+- **Quantization**: Removed deprecated `torch.ao.quantization` fallback. Now `torchao`-only with a clear `ImportError` if missing. Moved `torchao` from main `dependencies` to optional `quantize` group.
+- **`pyproject.toml`**: `torchao` moved to optional `[project.optional-dependencies] quantize` group; added to `dev` group for tests. Added `audioop-lts` conditonal dep for Python 3.13+ under `server` group.
 
 ### Removed
 - `MiniMaxM25.md` — orphaned file.

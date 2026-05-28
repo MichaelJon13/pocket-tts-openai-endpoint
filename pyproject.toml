@@ -25,8 +25,11 @@ dependencies = [
 
 [project.optional-dependencies]
 audio = ["soundfile>=0.12.0"]
-server = ["pydub>=0.25.1"]
-quantize = ["torchao>=0.16.0"]
+server = [
+    "pydub>=0.25.1",
+    "audioop-lts>=0.2.1; python_version >= '3.13'",
+]
+quantize = ["torchao>=0.17.0"]
 
 
 [dependency-groups]
@@ -40,6 +43,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-xdist>=3.8.0",
     "soundfile",
+    "torchao>=0.17.0",
 ]
 
 

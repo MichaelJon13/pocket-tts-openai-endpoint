@@ -11,7 +11,7 @@ pocket-tts is a CPU-based text-to-speech (TTS) model with an OpenAI-compatible H
 - **MimiModel**: Neural audio codec (from the `moshi` package) that compresses/decompresses audio to/from latent representations
 - **Conditioners**: Text processing via SentencePiece tokenizer and lookup table embeddings
 - **Streaming Architecture**: The entire pipeline supports streaming generation via stateful modules
-- **Web API**: FastAPI-based server with OpenAI-compatible `/v1/audio/speech` endpoint and web interface
+- **Web API**: FastAPI-based server with OpenAI-compatible `/v1/audio/speech`, `/v1/chat/completions` (LLM proxy with streaming TTS), and `/v1/audio/voices` endpoints
 
 ## Common Commands
 
@@ -95,6 +95,9 @@ This is a pure Python package with no build step required.
 - `test_cli_generate.py`: Tests for CLI generate command
 - `test_documentation_examples.py`: Ensures docs examples work
 - `test_openai_api.py`: Tests for OpenAI-compatible TTS API endpoints
+- `test_chat_completions.py`: Tests for `/v1/chat/completions` and `/v1/audio/voices` endpoints
+- `test_quantization.py`: Tests for int8 quantization (requires torchao)
+- `test_split_sentences.py`: Tests for text chunking logic
 - `test_container.py`: Tests for Podman/Docker container (requires podman, tests are skipped by default)
 
 ## Development Workflow
@@ -143,7 +146,8 @@ The `download_if_necessary()` utility handles `hf://` URLs and caches locally.
 2. **Python Version**: Supports Python 3.10 through 3.14 (>= 3.10,<3.15).
 3. **uv Python Preference**: Set to "only-managed" in pyproject.toml because system Python may lack headers.
 4. **CPU-Only PyTorch**: Uses PyTorch CPU index from `download.pytorch.org/whl/cpu` in uv config.
-5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality. `pydub` (optional: `pip install pocket-tts[server]`) provides audio format conversion (mp3, opus, aac, flac).
+5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality. `pydub` (optional: `pip install pocket-tts[server]`) provides audio format conversion (mp3, opus, aac, flac). Python 3.13+ requires `audioop-lts` (included automatically with `[server]`).
+6. **Quantization Dependency**: `torchao` is optional — install via `uv add torchao` or `uv sync --group quantize`. Not required for basic operation.
 
 ### Manual Container Testing
 

@@ -238,6 +238,59 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 
 Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](docs/CLI%20Commands/export_voice.md) for more details and examples.
 
+### Chat Completions with Voice
+
+The server provides an LLM proxy endpoint at `/v1/chat/completions` that sends your messages to any OpenAI-compatible backend and optionally speaks the response using pocket-tts.
+
+**Non-streaming** returns full LLM text + base64 WAV audio:
+```bash
+curl -s http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages":[{"role":"user","content":"Say hello in 5 words."}],
+    "stream": false,
+    "voice": "alloy",
+    "llm_base_url": "http://localhost:11434/v1",
+    "llm_model": "gpt-oss:20b"
+  }' | jq '.choices[0].message.content'
+```
+
+**Streaming** emits SSE events — each sentence is TTS-synthesized as it arrives:
+```bash
+curl -N http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages":[{"role":"user","content":"Tell me a fun fact about space."}],
+    "stream": true,
+    "voice": "alloy",
+    "llm_base_url": "http://localhost:11434/v1",
+    "llm_model": "gpt-oss:20b"
+  }'
+```
+
+Events:
+- `{"type": "text", "content": "..."}` — a completed sentence
+- `{"type": "audio", "content": "<base64 wav>", "text": "..."}` — audio for that sentence
+- `{"type": "done"}` — end of stream
+
+**Configuration:**
+
+The LLM backend defaults to `OPENAI_BASE_URL` / `OPENAI_API_KEY` env vars, or can be set per-request:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `llm_base_url` | `OPENAI_BASE_URL` or `https://api.openai.com/v1` | OpenAI-compatible API base URL |
+| `llm_api_key` | `OPENAI_API_KEY` | API key for the LLM |
+| `llm_model` | (same as `model`) | Model name to use at the LLM |
+| `voice` | `"alloy"` | TTS voice for the response |
+| `tts_enabled` | `true` | Set to `false` for text-only streaming |
+
+### List Voices
+
+```bash
+curl http://localhost:8000/v1/audio/voices | jq .
+```
+
 
 ## Using it as a Python library
 

@@ -56,4 +56,4 @@ def test_cli_quantize_flag(tmp_path):
 
 def test_backend_detection():
     backend = _get_backend()
-    assert backend in ("torchao", "torch.ao")
+    assert backend == "torchao"

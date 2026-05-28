@@ -1,16 +1,21 @@
+import asyncio
 import base64
 import io
 import json
 import logging
 import os
 import random
+import re
 import string
 import sys
 import tempfile
 import threading
+import uuid
 from pathlib import Path
 from queue import Queue
+from typing import AsyncGenerator
 
+import httpx
 import typer
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -19,7 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from typing_extensions import Annotated
 
-from pocket_tts.data.audio import stream_audio_chunks
+from pocket_tts.data.audio import StreamingWAVWriter, stream_audio_chunks
 from pocket_tts.default_parameters import (
     DEFAULT_EOS_THRESHOLD,
     DEFAULT_FRAMES_AFTER_EOS,
@@ -134,6 +139,24 @@ class SpeechRequest(BaseModel):
     speed: float | None = None
     instructions: str | None = None
     stream_format: str | None = None
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatCompletionRequest(BaseModel):
+    model: str = "gpt-4o-mini"
+    messages: list[ChatMessage]
+    stream: bool = False
+    temperature: float | None = None
+    max_tokens: int | None = None
+    voice: str = "alloy"
+    tts_enabled: bool = True
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str | None = None
 
 
 logger = logging.getLogger(__name__)
@@ -464,6 +487,307 @@ async def create_speech(request: SpeechRequest, http_request: Request):
         headers={
             "Content-Disposition": f"attachment; filename=speech.{response_format}",
             "Transfer-Encoding": "chunked",
+        },
+    )
+
+
+# ------------------------------------------------------
+# /v1/audio/voices — list available voices
+# ------------------------------------------------------
+
+
+@web_app.get("/v1/audio/voices")
+async def list_voices():
+    """List all available voices (OpenAI-mapped + custom)."""
+    openai_voices = {
+        v: {"pocket_voice": p, "type": "builtin", "gender": "unknown"}
+        for v, p in sorted(OPENAI_VOICE_TO_POCKET_VOICE.items(), key=lambda x: x[1])
+    }
+    custom_voices = {
+        vid: {"path": path, "type": "custom"}
+        for vid, path in CUSTOM_VOICES.items()
+    }
+    return {"voices": {**openai_voices, **custom_voices}}
+
+
+# ------------------------------------------------------
+# /v1/chat/completions — LLM proxy with sentence-level streaming TTS
+# ------------------------------------------------------
+
+
+_ABBREVIATIONS_PATTERN = re.compile(
+    r"\b(?:"
+    r"Dr|Mr|Ms|Mrs|St|vs|etc|approx|dept|est|govt|mt|ft|in|vol|no"
+    r"|Co|Inc|Ltd|Jr|Sr|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
+    r"|a\.m|p\.m|i\.e|e\.g"
+    r")\.(?=\s)"
+)
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split text into sentences on sentence-ending punctuation.
+
+    Preserves common English abbreviations (Dr., Mr., etc.) so they
+    don't trigger false splits.
+    """
+    # Protect abbreviation dots from being treated as sentence boundaries
+    placeholders: dict[str, str] = {}
+
+    def _protect(m: re.Match) -> str:
+        key = f"\x00{len(placeholders)}\x00"
+        placeholders[key] = m.group(0)
+        return key
+
+    text = _ABBREVIATIONS_PATTERN.sub(_protect, text)
+    parts = re.split(r"(?<=[.!?])\s+", text)
+
+    result = []
+    for p in parts:
+        p = p.strip()
+        # Restore protected abbreviations
+        for key, val in placeholders.items():
+            p = p.replace(key, val)
+        if p:
+            result.append(p)
+    return result
+
+
+async def _proxy_llm_stream(
+    request: ChatCompletionRequest,
+) -> AsyncGenerator[tuple[str, str], None]:
+    """Proxy messages to an LLM and yield (sentence_id, sentence) pairs.
+
+    Accumulates text deltas from the streaming LLM response, detects
+    sentence boundaries, and yields complete sentences as they arrive.
+    """
+    base_url = (
+        request.llm_base_url
+        or os.environ.get("OPENAI_BASE_URL")
+        or "https://api.openai.com/v1"
+    )
+    api_key = request.llm_api_key or os.environ.get("OPENAI_API_KEY", "")
+    llm_model = request.llm_model or request.model
+
+    payload: dict = {
+        "model": llm_model,
+        "messages": [m.model_dump() for m in request.messages],
+        "stream": True,
+    }
+    if request.temperature is not None:
+        payload["temperature"] = request.temperature
+    if request.max_tokens is not None:
+        payload["max_tokens"] = request.max_tokens
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream(
+            "POST", f"{base_url.rstrip('/')}/chat/completions", json=payload, headers=headers
+        ) as response:
+            if response.status_code != 200:
+                error_body = await response.aread()
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"LLM proxy error: {error_body.decode()}",
+                )
+
+            sentence_id = 0
+            buffer = ""
+
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:].strip()
+                if data_str == "[DONE]":
+                    # Flush remaining buffer
+                    remaining = buffer.strip()
+                    if remaining:
+                        yield (f"sent_{sentence_id}", remaining)
+                        sentence_id += 1
+                    break
+
+                try:
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                content = delta.get("content", "")
+                if not content:
+                    continue
+
+                buffer += content
+                sentences = _split_sentences(buffer)
+
+                # If we have complete sentences (all but last may be partial)
+                if len(sentences) > 1:
+                    for sent in sentences[:-1]:
+                        yield (f"sent_{sentence_id}", sent)
+                        sentence_id += 1
+                    buffer = sentences[-1]
+
+            # Flush any remaining
+            remaining = buffer.strip()
+            if remaining:
+                yield (f"sent_{sentence_id}", remaining)
+
+
+@web_app.post("/v1/chat/completions")
+async def chat_completions(request: ChatCompletionRequest, http_request: Request):
+    """
+    Chat completion endpoint with optional sentence-level streaming TTS.
+
+    Proxies messages to a configurable LLM backend. When ``tts_enabled`` is true
+    (default), each sentence is synthesized to audio as it completes, enabling
+    near-real-time voice responses.
+
+    **Non-streaming** returns a standard OpenAI chat completion JSON with the full
+    text in ``choices[0].message.content``.
+
+    **Streaming** returns SSE events with two event types:
+
+    * ``data: {"type": "text", "content": "...", "id": "..."}`` — text delta token
+    * ``data: {"type": "audio", "content": "<base64>", "text": "...", "id": "..."}``  # noqa: E501
+    * ``data: {"type": "done", "id": "..."}`` — signals completion
+    """
+    if request.llm_base_url is None and not os.environ.get("OPENAI_API_KEY"):
+        raise HTTPException(
+            status_code=400,
+            detail="No LLM configured. Set OPENAI_API_KEY env var or pass llm_base_url + llm_api_key.",
+        )
+
+    voice_name = request.voice
+    pocket_voice = OPENAI_VOICE_TO_POCKET_VOICE.get(voice_name, voice_name)
+    tts_enabled = request.tts_enabled and tts_model is not None
+
+    chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    created = int(__import__("time").time())
+
+    if not request.stream:
+        return await _handle_nonstreaming_chat(request, chat_id, created, pocket_voice, tts_enabled)
+
+    return await _handle_streaming_chat(request, chat_id, created, pocket_voice, tts_enabled)
+
+
+async def _handle_nonstreaming_chat(
+    request: ChatCompletionRequest,
+    chat_id: str,
+    created: int,
+    pocket_voice: str,
+    tts_enabled: bool,
+):
+    """Non-streaming: proxy LLM, accumulate full text, optionally TTS entire response."""
+    full_text = ""
+    try:
+        async for _, sentence in _proxy_llm_stream(request):
+            full_text += sentence + " "
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM proxy error: {exc}")
+
+    full_text = full_text.strip()
+
+    response: dict = {
+        "id": chat_id,
+        "object": "chat.completion",
+        "created": created,
+        "model": request.model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": full_text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    }
+
+    # If TTS enabled, generate audio and include it
+    if tts_enabled and full_text:
+        try:
+            model_state = tts_model._cached_get_state_for_audio_prompt(pocket_voice)
+            buf = io.BytesIO()
+            writer = StreamingWAVWriter(buf, tts_model.config.mimi.sample_rate)
+            writer.write_header(tts_model.config.mimi.sample_rate)
+            for chunk in tts_model.generate_audio_stream(
+                model_state=model_state, text_to_generate=full_text
+            ):
+                writer.write_pcm_data(chunk)
+            writer.finalize()
+            wav_data = buf.getvalue()
+            response["audio"] = {
+                "data": base64.b64encode(wav_data).decode("utf-8"),
+                "format": "wav",
+            }
+        except Exception as exc:
+            logger.warning("TTS generation failed in non-streaming chat: %s", exc)
+
+    return response
+
+
+async def _handle_streaming_chat(
+    request: ChatCompletionRequest,
+    chat_id: str,
+    created: int,
+    pocket_voice: str,
+    tts_enabled: bool,
+):
+    """Streaming: proxy LLM, emit text deltas + per-sentence audio events."""
+
+    async def generate() -> AsyncGenerator[str, None]:
+        model_state = None
+        if tts_enabled:
+            try:
+                model_state = tts_model._cached_get_state_for_audio_prompt(pocket_voice)
+            except Exception as exc:
+                logger.warning("Failed to load voice for TTS: %s", exc)
+                tts_nonlocal = False
+            else:
+                tts_nonlocal = True
+        else:
+            tts_nonlocal = False
+
+        try:
+            async for sent_id, sentence in _proxy_llm_stream(request):
+                yield f"data: {json.dumps({'type': 'text', 'content': sentence, 'id': sent_id})}\n\n"
+
+                if tts_nonlocal and model_state and sentence.strip():
+                    try:
+                        buf = io.BytesIO()
+                        writer = StreamingWAVWriter(buf, tts_model.config.mimi.sample_rate)
+                        writer.write_header(tts_model.config.mimi.sample_rate)
+                        for chunk in tts_model.generate_audio_stream(
+                            model_state=model_state,
+                            text_to_generate=sentence.strip(),
+                        ):
+                            writer.write_pcm_data(chunk)
+                        writer.finalize()
+                        wav_data = buf.getvalue()
+                        if wav_data:
+                            yield f"data: {json.dumps({'type': 'audio', 'content': base64.b64encode(wav_data).decode('utf-8'), 'text': sentence, 'id': sent_id})}\n\n"
+                    except Exception as exc:
+                        logger.warning("TTS generation failed for sentence: %s", exc)
+        except httpx.HTTPStatusError as exc:
+            yield f"data: {json.dumps({'type': 'error', 'content': f'LLM returned {exc.response.status_code}: {exc.response.text[:200]}'})}\n\n"
+        except httpx.RequestError as exc:
+            yield f"data: {json.dumps({'type': 'error', 'content': f'LLM connection failed: {exc}'})}\n\n"
+        except Exception as exc:
+            logger.exception("Chat streaming error")
+            yield f"data: {json.dumps({'type': 'error', 'content': f'Internal error: {exc}'})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'id': chat_id})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         },
     )
 
