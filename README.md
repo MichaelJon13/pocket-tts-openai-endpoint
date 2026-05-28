@@ -8,7 +8,7 @@ Forget about the hassle of using GPUs and web APIs serving TTS models. With Kyut
 Supports Python 3.10, 3.11, 3.12, 3.13 and 3.14. Requires PyTorch 2.5+. Does not require the gpu version of PyTorch.
 
 [🔊 Demo](https://kyutai.org/pocket-tts) | 
-[🐱‍💻GitHub Repository](https://github.com/kyutai-labs/pocket-tts) | 
+[🐱‍💻GitHub Repository](https://github.com/MichaelJon13/pocket-tts-openai-endpoint) | 
 [🤗 Hugging Face Model Card](https://huggingface.co/kyutai/pocket-tts) | 
 [⚙️ Tech report](https://kyutai.org/blog/2026-01-13-pocket-tts) |
 [📄 Paper](https://arxiv.org/abs/2509.06926) | 
@@ -37,15 +37,13 @@ Navigate to the [Kyutai website](https://kyutai.org/pocket-tts) to try it out di
 ## Trying it with the CLI
 
 ### The `generate` command
-You can use pocket-tts directly from the command line. We recommend using
-`uv` as it installs any dependencies on the fly in an isolated environment (uv installation instructions [here](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer)).
-You can also use `pip install pocket-tts` to install it manually.
+You can use pocket-tts directly from the command line with `uv` (installation instructions [here](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer)).
 
 This will generate a wav file `./tts_output.wav` saying the default text with the default voice, and display some speed statistics.
 ```bash
 uvx pocket-tts generate
-# or if you installed it manually with pip:
-pocket-tts generate
+# or if installed locally:
+uv run pocket-tts generate
 ```
 Modify the voice with `--voice` and the text with `--text`. We provide a small catalog of voices.
 Choose a pretrained language model with `--language` when running `generate`, `export-voice`, or `serve` (default: `english`). Non-english languages have also biggers 24 layers variants that are higher quality but slower. You can select them by using for example `--language italian_24l`.
@@ -85,7 +83,7 @@ The `--voice` argument can also take a plain wav file as input for voice cloning
 You can use your own or check out our [voice repository](https://huggingface.co/kyutai/tts-voices).
 We recommend [cleaning the sample](https://podcast.adobe.com/en/enhance) before using it with Pocket TTS, because the audio quality of the sample is also reproduced.
 
-Feel free to check out the [generate documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/generate/) for more details and examples.
+Feel free to check out the [generate documentation](docs/CLI%20Commands/generate.md) for more details and examples.
 For trying multiple voices and prompts quickly, prefer using the `serve` command.
 
 ### The `serve` command
@@ -105,36 +103,29 @@ pocket-tts serve --quantize --language english
 
 Navigate to `http://127.0.0.1:8000` to try the web interface. It's faster than the command line as the model is kept in memory between requests.
 
-You can check out the [serve documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/serve/) for more details and examples.
+You can check out the [serve documentation](docs/CLI%20Commands/serve.md) for more details and examples.
 
-### Hugging Face Authentication & Voice Cloning
+### Docker / Podman
 
-The voice cloning feature (including using your own `.wav` files with the `--voice` parameter or uploading voices via the web UI) requires downloading the voice cloning model weights, which are gated on Hugging Face.
+Voice cloning requires the gated model weights. To access them:
+1. Create a Hugging Face account and accept the terms on the [Pocket TTS Model Card](https://huggingface.co/kyutai/pocket-tts).
+2. Generate a Hugging Face Access Token (`HF_TOKEN`).
 
-To access these models, you must:
-1. Create a Hugging Face account and accept the terms of use on the [Pocket TTS Model Card](https://huggingface.co/kyutai/pocket-tts).
-2. Generate a Hugging Face Access Token (`HF_TOKEN`) from your HF account settings.
-
-#### Environment Setup (.env)
-
-We recommend storing your Hugging Face token in a `.env` file in the root of the project. This file is ignored by Git (configured in `.gitignore`) to prevent accidental commits of your secrets:
-
-Create a `.env` file in the root of your project:
+Create a `.env` file (ignored by git):
 ```env
 HF_TOKEN=your_hugging_face_token_here
 ```
 
-#### Running with Docker / Podman
-
-The `docker-compose.yaml` file is configured to automatically read the `HF_TOKEN` from the `.env` file and pass it to the container:
+The `docker-compose.yaml` reads `HF_TOKEN` from `.env` automatically:
 ```bash
-# Start container (will automatically read the .env file and pass the token)
 docker compose up -d
 # or
 podman-compose up -d
 ```
 
-If you are running the container directly with `podman` or `docker`, pass the token explicitly using `-e`:
+For rootless environments (like Podman), use `http://127.0.0.1:8000` instead of `localhost` to avoid IPv6 conflicts.
+
+Run directly:
 ```bash
 podman run -d \
   --name pocket-tts-openai \
@@ -145,35 +136,10 @@ podman run -d \
   localhost/pocket-tts-openai:latest
 ```
 
-#### Running Locally
-
-When running `pocket-tts` locally, you can load your `.env` variables into the environment:
+Run locally with `.env`:
 ```bash
-# Load .env variables and run the CLI or Server
 export $(cat .env | xargs) && uv run pocket-tts serve
 ```
-
-### Docker / Podman
-
-You can also run the server using Docker or Podman. Note that for rootless environments (like Podman), accessing the interface via the IPv4 loopback `http://127.0.0.1:8000` is recommended to avoid IPv6 `localhost` resolution conflicts:
-
-```bash
-# Using Docker Compose
-docker compose up -d
-
-# Using Podman Compose
-podman-compose up -d
-
-# Directly with Podman
-podman run -d \
-  --name pocket-tts-openai \
-  -p 8000:8000 \
-  -v pocket_tts_cache:/root/.cache/pocket_tts \
-  -v hf_cache:/root/.cache/huggingface \
-  localhost/pocket-tts-openai:latest
-```
-
-Navigate to `http://127.0.0.1:8000` to access the web interface.
 
 ### OpenAI-Compatible API
 
@@ -270,18 +236,18 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 
 ### The `export-voice` command
 
-Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/export_voice/) for more details and examples.
+Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](docs/CLI%20Commands/export_voice.md) for more details and examples.
 
 
 ## Using it as a Python library
 
-You can try out the Python library on Colab [here](https://colab.research.google.com/github/kyutai-labs/pocket-tts/blob/main/docs/pocket-tts-example.ipynb).
+You can try out the upstream Python library on Colab [here](https://colab.research.google.com/github/kyutai-labs/pocket-tts/blob/main/docs/pocket-tts-example.ipynb).
 
-Install the package with
+Install the package locally with
 ```bash
-pip install pocket-tts
-# or
 uv add pocket-tts
+# or
+uv sync  # from the repo root
 ```
 
 You can use this package as a simple Python library to generate audio from text.
@@ -323,13 +289,13 @@ model_state_copy = model.get_state_for_audio_prompt("./some_voice.safetensors")
 audio = model.generate_audio(model_state_copy, "Hello world!")
 ```
 
-You can check out the [Python API documentation](https://kyutai-labs.github.io/pocket-tts/API%20Reference/python-api/) for more details and examples.
+You can check out the [Python API documentation](docs/API%20Reference/python-api.md) for more details and examples.
+
 ## Unsupported features
 
 At the moment, we do not support (but would love pull requests adding):
 
 - [Adding silence in the text input to generate pauses.](https://github.com/kyutai-labs/pocket-tts/issues/6)
-- [Quantization to run the computation in int8.](https://github.com/kyutai-labs/pocket-tts/issues/7)
 
 We tried running this TTS model on the GPU but did not observe a speedup compared to CPU execution,
 notably because we use a batch size of 1 and a very small model.
@@ -338,7 +304,7 @@ notably because we use a batch size of 1 and a very small model.
 
 We accept contributions! Feel free to open issues or pull requests on GitHub.
 
-You can find development instructions in the [CONTRIBUTING.md](https://github.com/kyutai-labs/pocket-tts/tree/main/CONTRIBUTING.md) file. You'll also find there how to have an editable install of the package for local development.
+You can find development instructions in the [CONTRIBUTING.md](CONTRIBUTING.md) file. You'll also find there how to have an editable install of the package for local development.
 
 ## In-browser implementations
 
@@ -350,7 +316,7 @@ We don't have official support for this yet, but you can try out one of these co
 - [jax-js](https://github.com/ekzhang/jax-js/tree/main/website/src/routes/tts) by @ekzhang: Using jax-js, a ML library for the web. Demo [here](https://jax-js.com/tts)
 
 
-## Alterative implementations
+## Alternative implementations
 - [pocket-tts-mlx](https://github.com/jishnuvenugopal/pocket-tts-mlx) by @jishnuvenugopal - MLX backend optimized for Apple Silicon
 - [pocket-tts-xn](https://github.com/LaurentMazare/xn/tree/main/pocket-tts) by @LaurentMazare - A Rust port of Pocket TTS implemented with XN.
 - [pocket-tts-candle](https://github.com/babybirdprd/pocket-tts) by @babybirdprd - Candle version (Rust) with WebAssembly and PyO3 bindings.
@@ -364,6 +330,7 @@ We don't have official support for this yet, but you can try out one of these co
 - [pocket-tts-wyoming](https://github.com/ikidd/pocket-tts-wyoming) by @ikidd - Docker container for pocket-tts using Wyoming protocol, ready for Home Assistant Voice use.
 - [Sonorus](https://www.nexusmods.com/hogwartslegacy/mods/2409) by @KevinAHM - Talk to any named character in Hogwarts Legacy with their original voice.
 - [Mac pocket-tts](https://github.com/slaughters85j/pocket-tts) by @slaughters85j - Mac Desktop App + macOS Quick Action
+- [Native macOS App](https://github.com/slaughters85j/pocket-tts-macos) by @slaughters85j - Native macOS app, Python-free. Runs Pocket-TTS via Core ML, fully on-device. Includes signed and notarized .app releases.
 - [pocket-tts-openai_streaming_server](https://github.com/teddybear082/pocket-tts-openai_streaming_server) by @teddybear082 - OpenAI-compatible streaming server, dockerized and with an `.exe` release
 - [pocket-tts-unity](https://github.com/lookbe/pocket-tts-unity) by @lookbe - A Unity 6 integration for Pocket-TTS.
 - [ComfyUI-Pocket-TTS](https://github.com/ai-joe-git/ComfyUI-Pocket-TTS) by @ai-joe-git Lightweight CPU-based Text-to-Speech for ComfyUI
