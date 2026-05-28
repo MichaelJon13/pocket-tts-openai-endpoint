@@ -243,11 +243,11 @@ Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively 
 
 You can try out the upstream Python library on Colab [here](https://colab.research.google.com/github/kyutai-labs/pocket-tts/blob/main/docs/pocket-tts-example.ipynb).
 
-Install the package locally with
+Install the package from this repo:
 ```bash
-uv add pocket-tts
-# or
-uv sync  # from the repo root
+git clone https://github.com/MichaelJon13/pocket-tts-openai-endpoint.git
+cd pocket-tts-openai-endpoint
+uv sync
 ```
 
 You can use this package as a simple Python library to generate audio from text.

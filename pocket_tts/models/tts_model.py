@@ -264,7 +264,7 @@ class TTSModel(nn.Module):
                 attention and FFN layers. Reduces runtime memory by ~48% and improves
                 inference speed by ~27% on x86 (FBGEMM).
                 No measurable impact on speech quality (WER unchanged).
-                For optimized performance, install torchao: ``pip install pocket-tts[quantize]``
+                For optimized performance, install torchao: ``uv add torchao``
 
         Returns:
             TTSModel: Fully initialized model with loaded weights on cpu, ready for

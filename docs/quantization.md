@@ -7,8 +7,8 @@ Pocket TTS supports dynamic int8 quantization to reduce runtime memory usage and
 ### CLI
 
 ```bash
-pocket-tts generate --quantize --text "Hello world"
-pocket-tts serve --quantize
+uv run pocket-tts generate --quantize --text "Hello world"
+uv run pocket-tts serve --quantize
 ```
 
 ### Python API
