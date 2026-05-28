@@ -4,14 +4,14 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-pocket-tts is a CPU-based text-to-speech (TTS) model. The project uses a flow-based language model architecture with a neural audio codec (Mimi) for efficient speech synthesis.
+pocket-tts is a CPU-based text-to-speech (TTS) model with an OpenAI-compatible HTTP API. The project uses a flow-based language model architecture with a neural audio codec (Mimi) for efficient speech synthesis.
 
 **Key Architecture Components:**
 - **FlowLMModel**: Transformer-based flow language model that generates latent representations from text using Lagrangian Self Distillation (LSD)
 - **MimiModel**: Neural audio codec (from the `moshi` package) that compresses/decompresses audio to/from latent representations
 - **Conditioners**: Text processing via SentencePiece tokenizer and lookup table embeddings
 - **Streaming Architecture**: The entire pipeline supports streaming generation via stateful modules
-- **Web API**: FastAPI-based server for HTTP API access with web interface
+- **Web API**: FastAPI-based server with OpenAI-compatible `/v1/audio/speech` endpoint and web interface
 
 ## Common Commands
 
@@ -52,7 +52,7 @@ This is a pure Python package with no build step required.
 ### Main Package (`pocket_tts/`)
 
 **Entry Points:**
-- `main.py`: CLI implementation with Typer (commands: `generate`, `serve`, and web interface)
+- `main.py`: CLI implementation with Typer (commands: `generate`, `serve`, `export_voice`), OpenAI-compatible API, and web interface
 - `__init__.py`: Public API exports only `TTSModel`
 - `__main__.py`: Python module entry point
 - `default_parameters.py`: Default configuration values for generation parameters
@@ -84,6 +84,8 @@ This is a pure Python package with no build step required.
 **Utils (`utils/`):**
 - `config.py`: Pydantic config models for FlowLM and Mimi
 - `utils.py`: HuggingFace downloads, timing utilities
+- `logging_utils.py`: Logging configuration helpers
+- `weights_loading.py`: State dict loading for FlowLM and Mimi models
 
 **Configuration (`config/`):**
 - `english.yaml` (and per-language `.yaml` files): Model configuration (transformer dims, layers, vocab size, etc.)
@@ -141,22 +143,22 @@ The `download_if_necessary()` utility handles `hf://` URLs and caches locally.
 2. **Python Version**: Supports Python 3.10 through 3.14 (>= 3.10,<3.15).
 3. **uv Python Preference**: Set to "only-managed" in pyproject.toml because system Python may lack headers.
 4. **CPU-Only PyTorch**: Uses PyTorch CPU index from `download.pytorch.org/whl/cpu` in uv config.
-5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality.
+5. **Web Dependencies**: FastAPI and Uvicorn are included for server functionality. `pydub` (optional: `pip install pocket-tts[server]`) provides audio format conversion (mp3, opus, aac, flac).
 
 ### Manual Container Testing
 
 To test the container manually (tests are skipped by default):
 ```bash
 # Build and run the container
-podman build -t pocket-tts-test .
-podman run -d --name pocket-tts-test -p 8001:8000 --cap-add=sys_admin pocket-tts-test:latest uv run pocket-tts serve --host 0.0.0.0
+podman build -t pocket-tts-openai .
+podman run -d --name pocket-tts-openai -p 8001:8000 --cap-add=sys_admin pocket-tts-openai:latest uv run pocket-tts serve --host 0.0.0.0
 
 # Wait for health check
 curl http://localhost:8001/health
 
 # Test endpoints
-curl -X POST http://localhost:8001/v1/audio/speech -H "Content-Type: application/json" -d '{"input":"Hello","voice":"alloy"}' -o test.wav
+curl -X POST http://localhost:8001/v1/audio/speech -H "Content-Type: application/json" -d '{"input":"Hello","voice":"alloy"}' -o speech.wav
 
 # Clean up
-podman rm -f pocket-tts-test
+podman rm -f pocket-tts-openai
 ```
