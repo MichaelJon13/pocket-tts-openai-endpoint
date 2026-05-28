@@ -344,6 +344,38 @@ audio = model.generate_audio(model_state_copy, "Hello world!")
 
 You can check out the [Python API documentation](docs/API%20Reference/python-api.md) for more details and examples.
 
+## Offline backup (model weights are downloaded from HuggingFace)
+
+On first run, pocket-tts downloads model weights, tokenizer, and voice samples from
+HuggingFace Hub. If those files are ever removed from HuggingFace, new installs
+would fail — but existing cached copies continue working indefinitely.
+
+To ensure portability to a new machine, back up these two directories:
+
+```bash
+# ~490 MB — model weights, tokenizer, voice embeddings per language
+~/.cache/huggingface/
+
+# ~1 MB — cached voice prompts
+~/.cache/pocket_tts/
+```
+
+**Backup:**
+```bash
+tar czf pocket-tts-cache.tar.gz \
+  ~/.cache/huggingface/hub/models--kyutai--pocket-tts-without-voice-cloning \
+  ~/.cache/huggingface/hub/models--kyutai--tts-voices \
+  ~/.cache/pocket_tts/
+```
+
+**Restore on a new machine:**
+```bash
+# Extract before first run
+tar xzf pocket-tts-cache.tar.gz -C ~/
+```
+
+The cache directories are read-only after extraction — no HF token needed.
+
 ## Unsupported features
 
 At the moment, we do not support (but would love pull requests adding):
